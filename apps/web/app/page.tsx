@@ -263,10 +263,10 @@ export default function Home() {
         <header className="animate-in fade-in slide-in-from-top-3 duration-700 flex flex-col gap-4 rounded-3xl border border-white/15 bg-black/75 p-4 shadow-[0_24px_70px_-42px_rgba(0,0,0,0.85)] backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div>
             <p className="w-fit rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-zinc-400">
-              Solana Devnet
+              Blockchain AI Buddy
             </p>
             <h1 className="mt-3 font-heading text-3xl leading-tight text-white sm:text-4xl">
-              Solana AI Agent
+              Blockchain AI Buddy
             </h1>
             <p className="mt-2 max-w-xl text-sm text-zinc-300 sm:text-base">
               Pay on-chain and generate instantly. Minimal flow, provable spend,
