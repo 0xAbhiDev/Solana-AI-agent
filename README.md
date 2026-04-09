@@ -1,159 +1,148 @@
-# Turborepo starter
+# Blockchain AI Buddy
 
-This Turborepo starter is maintained by the Turborepo core team.
+> **Live app → [https://blockchain-ai-buddy.vercel.app](https://blockchain-ai-buddy.vercel.app)**
 
-## Using this example
+A pay-per-prompt AI assistant built on Solana. Connect your wallet, pay a small fee in **SOL** or **USDC**, and get an instant AI-generated response — every query is provably recorded on-chain.
 
-Run the following command:
+---
 
-```sh
-npx create-turbo@latest
+## Features
+
+- 🔗 **Solana wallet integration** — supports all major Solana wallets via `@solana/wallet-adapter`
+- 💸 **On-chain micropayments** — pay **0.02 SOL** or **1 USDC** per prompt
+- 🤖 **AI responses** — powered by [Groq](https://groq.com/) (`llama-3.1-8b-instant`)
+- 🗂️ **Prompt history** — all past prompts and AI answers are stored per wallet and can be cleared at any time
+- 🗄️ **PostgreSQL + Prisma** — prompt records (wallet, tx signature, prompt, AI response) are persisted in a Postgres database
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | [Next.js 16](https://nextjs.org/) (App Router) |
+| Styling | [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) |
+| Blockchain | [Solana web3.js](https://solana-labs.github.io/solana-web3.js/) + `@solana/wallet-adapter` |
+| AI | [Groq SDK](https://groq.com/) — `llama-3.1-8b-instant` |
+| Database | PostgreSQL via [Prisma](https://www.prisma.io/) |
+| Monorepo | [Turborepo](https://turborepo.dev/) |
+| Package manager | [Bun](https://bun.sh/) |
+| Deployment | [Vercel](https://vercel.com/) |
+
+---
+
+## Repository Structure
+
+```
+.
+├── apps/
+│   └── web/           # Main Next.js application (Blockchain AI Buddy)
+│       ├── app/
+│       │   ├── page.tsx                 # Home page UI
+│       │   ├── layout.tsx               # Root layout + wallet provider
+│       │   ├── WalletButton.tsx         # Wallet connect button
+│       │   ├── WalletContextProvider.tsx# Solana wallet adapter context
+│       │   └── api/
+│       │       ├── generate/route.ts    # POST — save prompt & call Groq AI
+│       │       └── history/route.ts     # GET/DELETE — fetch or clear wallet history
+│       ├── components/                  # Reusable UI components (shadcn/ui)
+│       ├── lib/                         # Prisma client and utilities
+│       └── prisma/
+│           └── schema.prisma            # Agent model (wallet, tx, prompt, response)
+└── packages/
+    ├── ui/                # Shared React component library
+    ├── eslint-config/     # Shared ESLint configuration
+    └── typescript-config/ # Shared TypeScript configuration
 ```
 
-## What's inside?
+---
 
-This Turborepo includes the following packages/apps:
+## How It Works
 
-### Apps and Packages
+1. **Connect Wallet** — the user connects a Solana wallet (Devnet USDC is supported via the Devnet USDC mint).
+2. **Write a Prompt** — between 10 and 500 characters.
+3. **Choose Payment** — pay **0.02 SOL** or **1 USDC**; the transaction is sent to the treasury wallet and confirmed on-chain.
+4. **AI Response** — once the transaction is confirmed, the prompt is sent to Groq's API and the response is displayed and stored in the database alongside the transaction signature.
+5. **History** — all previous prompts for the connected wallet are displayed and can be refreshed or cleared.
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+---
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+## Getting Started
 
-### Utilities
+### Prerequisites
 
-This Turborepo has some additional tools already setup for you:
+- [Bun](https://bun.sh/) ≥ 1.3
+- Node.js ≥ 18
+- A PostgreSQL database
+- A [Groq API key](https://console.groq.com/)
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+### Installation
 
 ```sh
-cd my-turborepo
-turbo build
+git clone https://github.com/0xAbhiDev/Solana-AI-agent.git
+cd Solana-AI-agent
+bun install
 ```
 
-Without global `turbo`, use your package manager:
+### Environment Variables
 
-```sh
-cd my-turborepo
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+Create `apps/web/.env` with the following:
+
+```env
+DATABASE_URL="postgresql://user:password@host:5432/dbname"
+GROQ_API_KEY="your_groq_api_key"
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+### Database Setup
 
 ```sh
-turbo build --filter=docs
+cd apps/web
+bunx prisma db push
 ```
 
-Without global `turbo`:
+### Development
 
 ```sh
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+# Run all apps
+bun run dev
 
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
+# Run only the web app
 turbo dev --filter=web
 ```
 
-Without global `turbo`:
+### Build
 
 ```sh
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+bun run build
 ```
 
-### Remote Caching
+---
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+## API Routes
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+| Method | Route | Description |
+|--------|-------|-------------|
+| `POST` | `/api/generate` | Accepts `{ prompt, txSignature, payerPublicKey }`, saves the record, calls Groq, and returns the AI response. |
+| `GET` | `/api/history?wallet=<pubkey>` | Returns the last 20 prompts for the given wallet. |
+| `DELETE` | `/api/history?wallet=<pubkey>` | Deletes all prompt records for the given wallet. |
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+---
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+## Database Schema
 
-```sh
-cd my-turborepo
-turbo login
+```prisma
+model Agent {
+  id          Int      @id @default(autoincrement())
+  userWallet  String
+  txSignature String   @unique
+  promptText  String
+  aiResponse  String
+  createdAt   DateTime @default(now())
+}
 ```
 
-Without global `turbo`, use your package manager:
+---
 
-```sh
-cd my-turborepo
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
+## License
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+MIT
