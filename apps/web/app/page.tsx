@@ -27,8 +27,8 @@ const USDC_AMOUNT = 1_000_000;
 type FormValues = z.infer<typeof formSchema>;
 
 export default function Home() {
-  const [aiAnswer, setAiAnswer] = useState("");
-  const [submittedPrompt, setSubmittedPrompt] = useState("");
+  const [aiAnswer, setAiAnswer] = useState<string[]>([]);
+  const [submittedPrompt, setSubmittedPrompt] = useState<string[]>([]);
   const [isPaymentMethodOpen, setIsPaymentMethodOpen] = useState(false);
   const { connected, sendTransaction, publicKey } = useWallet();
   const { connection } = useConnection();
@@ -74,8 +74,8 @@ export default function Home() {
       };
     };
 
-    setSubmittedPrompt(values.prompt);
-    setAiAnswer(dbResult.record?.aiResponse ?? "No AI answer was returned.");
+    setSubmittedPrompt((prev) => [...prev, values.prompt]);
+    setAiAnswer((prev) => [...prev, dbResult.record?.aiResponse ?? "No AI answer was returned."]);
   };
 
   const onChoosePaymentMethod = () => {
@@ -277,29 +277,30 @@ export default function Home() {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-2">
-          {submittedPrompt ? (
-            <article className="animate-in fade-in slide-in-from-bottom-3 duration-700 rounded-3xl border border-white/12 bg-black/70 p-4 text-zinc-100 backdrop-blur-md">
+          {submittedPrompt.map((prompt, index) => (
+            <article className="animate-in fade-in slide-in-from-bottom-3 duration-700 rounded-3xl border border-white/12 bg-black/70 p-4 text-zinc-100 backdrop-blur-md" key={index}>
               <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">
                 Submitted Prompt
               </p>
               <p className="mt-2 whitespace-pre-wrap wrap-break-word text-sm text-zinc-300 sm:text-base">
-                {submittedPrompt}
+                {prompt}
               </p>
             </article>
-          ) : null}
+          ))}
 
-          {aiAnswer ? (
+          {aiAnswer.map((answer, index) => (
             <article
               className={`animate-in fade-in slide-in-from-bottom-3 duration-700 delay-100 rounded-3xl border border-white/12 bg-black/70 p-4 text-zinc-100 backdrop-blur-md ${submittedPrompt ? "lg:col-span-1" : "lg:col-span-2"}`}
+              key={index}
             >
               <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">
                 AI Answer
               </p>
               <p className="mt-2 whitespace-pre-wrap wrap-break-word text-sm text-zinc-300 sm:text-base">
-                {aiAnswer}
+                {answer}
               </p>
             </article>
-          ) : null}
+          ) )}
         </section>
       </div>
     </main>
