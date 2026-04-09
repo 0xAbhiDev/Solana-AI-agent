@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -26,9 +26,21 @@ const USDC_AMOUNT = 1_000_000;
 
 type FormValues = z.infer<typeof formSchema>;
 
+type HistoryItem = {
+  id: number;
+  promptText: string;
+  aiResponse: string;
+  txSignature: string;
+  createdAt: string;
+};
+
 export default function Home() {
-  const [aiAnswer, setAiAnswer] = useState<string[]>([]);
-  const [submittedPrompt, setSubmittedPrompt] = useState<string[]>([]);
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [submittedPrompt, setSubmittedPrompt] = useState("");
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [isHistoryClearing, setIsHistoryClearing] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const [isPaymentMethodOpen, setIsPaymentMethodOpen] = useState(false);
   const { connected, sendTransaction, publicKey } = useWallet();
   const { connection } = useConnection();
@@ -68,19 +80,106 @@ export default function Home() {
       throw new Error("Failed to save prompt to database");
     }
 
-    const dbResult = (await response.json()) as {
-      record?: {
-        aiResponse?: string;
-      };
-    };
+    const dbResult = (await response.json()) as { record?: HistoryItem };
+    const latestPrompt = dbResult.record?.promptText ?? values.prompt;
+    const latestAnswer = dbResult.record?.aiResponse ?? "No AI answer was returned.";
 
-    setSubmittedPrompt((prev) => [...prev, values.prompt]);
-    setAiAnswer((prev) => [...prev, dbResult.record?.aiResponse ?? "No AI answer was returned."]);
+    setSubmittedPrompt(latestPrompt);
+    setAiAnswer(latestAnswer);
+
+    if (dbResult.record) {
+      setHistory((prev) => [
+        dbResult.record as HistoryItem,
+        ...prev.filter((item) => item.id !== dbResult.record?.id),
+      ]);
+    }
   };
 
   const onChoosePaymentMethod = () => {
     setIsPaymentMethodOpen(true);
   };
+
+  const loadHistory = useCallback(async (wallet: PublicKey) => {
+    setIsHistoryLoading(true);
+    setHistoryError("");
+
+    try {
+      const response = await fetch(
+        `/api/history?wallet=${encodeURIComponent(wallet.toString())}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to load history");
+      }
+
+      const data = (await response.json()) as { history?: HistoryItem[] };
+      setHistory(data.history ?? []);
+    } catch (error) {
+      console.error("Failed to load history:", error);
+      setHistoryError("Unable to load your history right now.");
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!connected || !publicKey) {
+      setHistory([]);
+      setHistoryError("");
+      return;
+    }
+
+    void loadHistory(publicKey);
+  }, [connected, loadHistory, publicKey]);
+
+  const formatHistoryDate = (dateValue: string) => {
+    const parsedDate = new Date(dateValue);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return dateValue;
+    }
+
+    return parsedDate.toLocaleString();
+  };
+
+  const clearHistory = useCallback(async (wallet: PublicKey) => {
+    const shouldClear = window.confirm(
+      "Clear your full prompt history for this wallet? This action cannot be undone."
+    );
+
+    if (!shouldClear) {
+      return;
+    }
+
+    setIsHistoryClearing(true);
+    setHistoryError("");
+
+    try {
+      const response = await fetch(
+        `/api/history?wallet=${encodeURIComponent(wallet.toString())}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to clear history");
+      }
+
+      setHistory([]);
+      setSubmittedPrompt("");
+      setAiAnswer("");
+    } catch (error) {
+      console.error("Failed to clear history:", error);
+      setHistoryError("Unable to clear your history right now.");
+    } finally {
+      setIsHistoryClearing(false);
+    }
+  }, []);
 
   const onUsdcSelect = async (values: FormValues) => {
     if (!connected) {
@@ -277,30 +376,109 @@ export default function Home() {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-2">
-          {submittedPrompt.map((prompt, index) => (
-            <article className="animate-in fade-in slide-in-from-bottom-3 duration-700 rounded-3xl border border-white/12 bg-black/70 p-4 text-zinc-100 backdrop-blur-md" key={index}>
+          {submittedPrompt ? (
+            <article className="animate-in fade-in slide-in-from-bottom-3 duration-700 rounded-3xl border border-white/12 bg-black/70 p-4 text-zinc-100 backdrop-blur-md">
               <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">
                 Submitted Prompt
               </p>
               <p className="mt-2 whitespace-pre-wrap wrap-break-word text-sm text-zinc-300 sm:text-base">
-                {prompt}
+                {submittedPrompt}
               </p>
             </article>
-          ))}
+          ) : null}
 
-          {aiAnswer.map((answer, index) => (
+          {aiAnswer ? (
             <article
               className={`animate-in fade-in slide-in-from-bottom-3 duration-700 delay-100 rounded-3xl border border-white/12 bg-black/70 p-4 text-zinc-100 backdrop-blur-md ${submittedPrompt ? "lg:col-span-1" : "lg:col-span-2"}`}
-              key={index}
             >
               <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">
                 AI Answer
               </p>
               <p className="mt-2 whitespace-pre-wrap wrap-break-word text-sm text-zinc-300 sm:text-base">
-                {answer}
+                {aiAnswer}
               </p>
             </article>
-          ) )}
+          ) : null}
+        </section>
+
+        <section className="animate-in fade-in slide-in-from-bottom-3 duration-700 delay-150 rounded-3xl border border-white/12 bg-black/70 p-5 backdrop-blur-md sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">
+                User History
+              </p>
+              <p className="mt-1 text-sm text-zinc-400">
+                Latest paid prompts for your connected wallet.
+              </p>
+            </div>
+            {connected && publicKey ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void loadHistory(publicKey)}
+                  disabled={isHistoryLoading || isHistoryClearing}
+                  className="h-9 rounded-full border border-white/20 bg-black/50 px-4 text-zinc-100 hover:bg-zinc-900 disabled:cursor-not-allowed"
+                >
+                  {isHistoryLoading ? "Refreshing..." : "Refresh"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void clearHistory(publicKey)}
+                  disabled={isHistoryLoading || isHistoryClearing || history.length === 0}
+                  className="h-9 rounded-full border border-red-300/35 bg-red-500/10 px-4 text-red-200 hover:bg-red-500/20 disabled:cursor-not-allowed"
+                >
+                  {isHistoryClearing ? "Clearing..." : "Clear History"}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+
+          {!connected ? (
+            <p className="mt-4 rounded-2xl border border-white/12 bg-black/45 px-3 py-2 text-sm text-zinc-400">
+              Connect your wallet to view your history.
+            </p>
+          ) : null}
+
+          {connected && isHistoryLoading ? (
+            <p className="mt-4 text-sm text-zinc-400">Loading history...</p>
+          ) : null}
+
+          {connected && historyError ? (
+            <p className="mt-4 rounded-2xl border border-red-300/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {historyError}
+            </p>
+          ) : null}
+
+          {connected && !isHistoryLoading && !historyError && history.length === 0 ? (
+            <p className="mt-4 rounded-2xl border border-white/12 bg-black/45 px-3 py-2 text-sm text-zinc-400">
+              No history yet. Complete your first paid prompt to create entries.
+            </p>
+          ) : null}
+
+          {connected && history.length > 0 ? (
+            <div className="mt-4 space-y-3">
+              {history.map((item) => (
+                <article
+                  key={`${item.id}-${item.txSignature}`}
+                  className="rounded-2xl border border-white/10 bg-black/45 p-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                    <span>{formatHistoryDate(item.createdAt)}</span>
+                    <span className="text-zinc-700">|</span>
+                    <span className="truncate">
+                      tx: {item.txSignature.slice(0, 8)}...{item.txSignature.slice(-8)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-zinc-200">
+                    Prompt: <span className="text-zinc-300">{item.promptText}</span>
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm text-zinc-400">
+                    AI: {item.aiResponse}
+                  </p>
+                </article>
+              ))}
+            </div>
+          ) : null}
         </section>
       </div>
     </main>
