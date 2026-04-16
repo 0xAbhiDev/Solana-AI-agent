@@ -1,15 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useAnchorWallet,
+  useConnection,
+  useWallet,
+} from "@solana/wallet-adapter-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { createTransferCheckedInstruction, getAssociatedTokenAddress } from "@solana/spl-token";
-import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WalletButton } from "./WalletButton";
 import * as z from "zod";
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import type {AiPaymentVault} from "@anchor/ai_payment_vault";
+
 
 const formSchema = z.object({
   prompt: z
@@ -18,11 +25,7 @@ const formSchema = z.object({
     .max(500, "Maximum 500 characters"),
 });
 
-const TREASURY_PUBKEY = new PublicKey("ESki1JC3S2TV6kV3yY9YgAtH82HXiCSTw2CLpayU3tAR");
-const SOL_COST_LAMPORTS = 20_000_000;
-const USDC_MINT = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
-const USDC_DECIMALS = 6;
-const USDC_AMOUNT = 1_000_000;
+
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -33,6 +36,8 @@ type HistoryItem = {
   txSignature: string;
   createdAt: string;
 };
+const USDC_MINT = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+
 
 export default function Home() {
   const [aiAnswer, setAiAnswer] = useState("");
@@ -42,8 +47,24 @@ export default function Home() {
   const [isHistoryClearing, setIsHistoryClearing] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [isPaymentMethodOpen, setIsPaymentMethodOpen] = useState(false);
-  const { connected, sendTransaction, publicKey } = useWallet();
+  const { connected, publicKey } = useWallet();
+  const anchorWallet = useAnchorWallet();
   const { connection } = useConnection();
+
+const program = useMemo(() => {
+  if (!anchorWallet || !connection) return null;
+
+  const provider = new anchor.AnchorProvider(
+    connection,
+    anchorWallet,
+    { commitment: "confirmed" }
+  );
+
+  return new anchor.Program<AiPaymentVault>(
+    require("../anchor/ai_payment_vault.json"),   
+    provider                                     
+  );
+}, [anchorWallet, connection]);
 
   const {
     register,
@@ -182,77 +203,76 @@ export default function Home() {
   }, []);
 
   const onUsdcSelect = async (values: FormValues) => {
-    if (!connected) {
+    if (!connected || !publicKey) {
       alert("Please connect your wallet first.");
       return;
     }
-    try {
-      const payerPublicKey = publicKey;
+    try{
+      if(!program){
+        throw new Error("Program not initialized");
+      } 
+      
+       const tx = await program.methods
+      .payForPromptUsdc(new anchor.BN(1_000_000)) // 1 USDC
+      .accounts({
+        user: publicKey,
+        mint: USDC_MINT,
+      })
+      .rpc();
+      await connection.confirmTransaction(tx, "confirmed");
 
-      if (!payerPublicKey) {
-        alert("Unable to retrieve your wallet address.");
-        return;
-      }
+    await submitPromptRecord(values, tx, publicKey);
 
-      const userUsdcAddress = await getAssociatedTokenAddress(
-        USDC_MINT,
-        payerPublicKey
-      );
-      const treasuryUsdcAddress = await getAssociatedTokenAddress(
-        USDC_MINT,
-        TREASURY_PUBKEY
-      );
-
-      const transaction = new Transaction().add(
-        createTransferCheckedInstruction(
-          userUsdcAddress,
-          USDC_MINT,
-          treasuryUsdcAddress,
-          payerPublicKey,
-          USDC_AMOUNT,
-          USDC_DECIMALS
-        )
-      );
-
-      const signature = await sendTransaction(transaction, connection);
-      await connection.confirmTransaction(signature, "confirmed");
-      await submitPromptRecord(values, signature, payerPublicKey);
-    } catch (error) {
-      console.error("Transaction failed:", error);
-      alert("Transaction failed. Please try again.");
-    }
+    console.log("✅ USDC payment confirmed on-chain:", tx);
+  } catch (error) {
+    console.error("USDC payment failed:", error);
+    alert("Transaction failed. Please try again.");
+  }    
   };
 
   const onSolSelect = async (values: FormValues) => {
-    if (!connected) {
+    if (!connected || !publicKey) {
       alert("Please connect your wallet first.");
       return;
     }
-
     try {
-      const payerPublicKey = publicKey;
-
-      if (!payerPublicKey) {
-        alert("Unable to retrieve your wallet address.");
-        return;
+      if(!program){
+        throw new Error("Program not initialized");
       }
 
-      const transaction = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: payerPublicKey,
-          toPubkey: TREASURY_PUBKEY,
-          lamports: SOL_COST_LAMPORTS,
-        })
-      );
+    const tx = await program.methods
+      .payForPrompt(new anchor.BN(20_000_000)) // 0.02 SOL
+      .accounts({
+        user: publicKey,
+      })
+      .rpc();
+    await connection.confirmTransaction(tx, "confirmed");
 
-      const signature = await sendTransaction(transaction, connection);
-      await connection.confirmTransaction(signature, "confirmed");
-      await submitPromptRecord(values, signature, payerPublicKey);
-    } catch (error) {
-      console.error("Transaction failed:", error);
-      alert("Transaction failed. Please try again.");
-    }
+    await submitPromptRecord(values, tx, publicKey);
+  console.log("✅ SOL payment confirmed on-chain:", tx);
+
+  } 
+  catch (error) {
+    console.error("SOL payment failed:", error);
+    alert("Transaction failed. Please try again.");
+  } 
+ };
+
+
+
+useEffect(() => {
+  if (!program) return;
+
+  const listener = program.addEventListener("paymentMade", (event) => {
+    console.log("Payment confirmed on-chain!", event);
+    // You can trigger Framer Motion toast / confetti / success state here
+  });
+
+  return () => {
+    program.removeEventListener(listener);
   };
+}, [program]);
+
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#050505] px-4 py-6 text-zinc-100 sm:px-6 sm:py-10">
