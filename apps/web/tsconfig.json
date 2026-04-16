@@ -26,10 +26,7 @@
     "paths": {
       "@/*": [
         "./*"
-      ],
-      "@anchor/*": [
-    "../../ai-payment-vault/target/types/*"
- ]
+      ]
     },
     "strictNullChecks": true
   },

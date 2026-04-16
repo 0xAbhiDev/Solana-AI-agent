@@ -14,8 +14,7 @@ import { Input } from "@/components/ui/input";
 import { WalletButton } from "./WalletButton";
 import * as z from "zod";
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
-import type {AiPaymentVault} from "@anchor/ai_payment_vault";
+import idl from "../anchor/ai_payment_vault.json";
 
 
 const formSchema = z.object({
@@ -60,10 +59,7 @@ const program = useMemo(() => {
     { commitment: "confirmed" }
   );
 
-  return new anchor.Program<AiPaymentVault>(
-    require("../anchor/ai_payment_vault.json"),   
-    provider                                     
-  );
+  return new anchor.Program(idl as anchor.Idl, provider);
 }, [anchorWallet, connection]);
 
   const {
